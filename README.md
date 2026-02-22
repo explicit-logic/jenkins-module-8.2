@@ -226,3 +226,31 @@ docker push <docker username>/app:freestyle
 7. Run the job, click `Build Now`
 
 ![Freestyle Demo](./images/jenkins-freestyle.gif)
+
+### Create `Pipeline` Jenkins job
+
+1. Go to the main page and click `New Item`
+
+Name: `pipeline`
+
+Select an item type: `Pipeline`
+
+2. Scroll to `Pipeline` section
+
+Definition: `Pipeline script from SCM`
+
+SCM: `Git`
+
+Repository URL: `https://github.com/explicit-logic/jenkins-module-8.2`
+
+Credentials: `github`
+
+Branches to build: `*/pipeline`
+
+3. Run the job, click `Build with Parameters`
+
+DOCKER_REPO: `<docker username>/app:pipeline`
+
+![Pipeline Params](./images/pipeline-params.png)
+
+![Jenkins Pipeline Demo](./images/jenkins-pipeline.gif)
