@@ -6,7 +6,7 @@ pipeline {
     maven 'maven-3.9'
   }
   parameters {
-    string(name: 'DOCKER_REPO', defaultValue: 'explicitlogic/app:pipeline')
+    string(name: 'DOCKER_REPO', defaultValue: 'explicitlogic/app')
   }
   stages {
     stage("init") {
@@ -14,6 +14,21 @@ pipeline {
         dir('app') {
           script {
             gv = load "script.groovy"
+          }
+        }
+      }
+    }
+
+    stage("test") {
+      when {
+        expression {
+          BRANCH_NAME == "main"
+        }
+      }
+      steps {
+        dir('app') {
+          script {
+            gv.testApp()
           }
         }
       }
@@ -33,7 +48,7 @@ pipeline {
       steps {
         dir('app') {
           script {
-            gv.buildImage(params.DOCKER_REPO)
+            gv.buildImage(params.DOCKER_REPO, env.BRANCH_NAME)
           }
         }
       }

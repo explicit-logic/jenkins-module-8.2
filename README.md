@@ -25,232 +25,313 @@ CI Pipeline for a Java Maven application to build and push to the repository
 
 ### Prerequisites
 
-Install Jenkins on DigitalOcean (complete all the steps):
+Before starting, complete all steps to install Jenkins on DigitalOcean:
 
-https://github.com/explicit-logic/jenkins-module-8.1
+- [jenkins-module-8.1](https://github.com/explicit-logic/jenkins-module-8.1)
 
 ---
 
 ### Install Build Tools (Maven, Node) in Jenkins
 
-1. Configure a plugin for Maven
+#### 1. Configure Maven plugin
 
-Navigate to Manage Jenkins -> Tools -> Maven installations
+Navigate to **Manage Jenkins** > **Tools** > **Maven installations**
 
-Choose `Add Maven`
+Click **Add Maven** and fill in:
 
-Name: `maven-3.9`
+| Field | Value |
+|-------|-------|
+| Name  | `maven-3.9` |
 
-Click Save
+Click **Save**.
 
-![](./images/configure-maven.png)
+![Configure Maven](./images/configure-maven.png)
 
-2. Install npm and Node in Jenkins container
+#### 2. Install Node.js and npm inside the Jenkins container
 
-Enter a `docker` container as a `root` user
-
+Enter the Jenkins Docker container as the `root` user:
 
 ```sh
 docker exec -u 0 -it <container_id> bash
-
-apt update
-apt install curl
 ```
 
-The curl command used to install NodeJS on the Jenkins server is:
+Update packages and install `curl`:
+
+```sh
+apt update
+apt install -y curl
+```
+
+Download and run the NodeSource setup script, then install Node.js:
 
 ```sh
 curl -sL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
-
 bash nodesource_setup.sh
-
-apt install nodejs
-
-node -v # to check NodeJS is installed
-npm -v # to check npm is installed
+apt install -y nodejs
 ```
 
-3. Install `Stage view` plugin
+Verify the installation:
 
-- Navigate to Manage Jenkins -> Plugins -> Available plugins
+```sh
+node -v   # should print v20.x.x
+npm -v    # should print a version number
+```
 
-- Find `Stage view` plugin and click Install
+#### 3. Install the `Pipeline Stage View` plugin
 
-- Click "Restart jenkins when installation is complete and no jobs are running"
+- Navigate to **Manage Jenkins** > **Plugins** > **Available plugins**
+- Search for `Pipeline Stage View`, select it, and click **Install**
+- Check **Restart Jenkins when installation is complete and no jobs are running**
 
-![](./images/stage-view.png)
+![Stage View plugin](./images/stage-view.png)
 
-- Start Jenkins manually
+If Jenkins does not restart automatically, start it manually:
 
 ```sh
 docker ps -a
 docker start <container_id>
 ```
 
-- Navigate to installed plugins and check that plugin has been installed
+- Navigate to **Manage Jenkins** > **Plugins** > **Installed plugins** to confirm the plugin is active.
 
-### Make Docker available on Jenkins server
+---
 
-1. Stop existed Jenkins container
+### Make Docker Available on the Jenkins Server
+
+> **Why?** Jenkins needs access to the host Docker daemon so it can build and push images as part of the pipeline.
+
+#### 1. Stop the existing Jenkins container
 
 ```sh
 docker ps
 docker stop <container_id>
 ```
 
-2. Start a new Jenkins container
+#### 2. Start a new Jenkins container with Docker socket mounted
 
 ```sh
 docker run -p 8080:8080 -p 5000:5000 -d \
--v jenkins_home:/var/jenkins_home \
--v /var/run/docker.sock:/var/run/docker.sock \
-jenkins/jenkins:lts
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  jenkins/jenkins:lts
 ```
 
-3. Go inside the Jenkins container as `root` user
+#### 3. Enter the container as `root` and install Docker
+
 ```sh
 docker ps
 docker exec -it -u 0 <container_id> bash
 ```
 
-4. Execute docker installation
+Run the official Docker install script:
 
 ```sh
-curl https://get.docker.com/ > dockerinstall && chmod 777 dockerinstall && ./dockerinstall
+curl https://get.docker.com/ > dockerinstall && chmod 755 dockerinstall && ./dockerinstall
 ```
 
-5. Provide permissions:
+#### 4. Grant the Jenkins user access to the Docker socket
+
 ```sh
 chmod 666 /var/run/docker.sock
 ```
 
-6. Logout as root user from the container and log-in again as jenkins
+#### 5. Re-enter the container as the `jenkins` user and verify
 
 ```sh
 exit
 docker exec -it <container_id> bash
+docker pull redis   # should succeed if Docker access is working
 ```
 
-Try this to check the Docker works: `docker pull redis`
+---
 
-### Create Jenkins credentials for a git repository
+### Create Jenkins Credentials for GitHub
 
-1. Navigate to Manage Jenkins -> Credentials
+1. Navigate to **Manage Jenkins** > **Credentials** > **System** > **Global credentials**
+2. Click **Add Credentials** and fill in:
 
-2. Click `Add Credentials`
+| Field | Value |
+|-------|-------|
+| Kind | `Username with password` |
+| Username | `<Your GitHub username>` |
+| Password | `<Your GitHub password>` |
+| Treat username as secret | `Yes` |
+| ID | `github` |
 
-3. Select `Username with password`
+3. Click **Create**.
 
-Username: `<Your GitHub account username>`
-Password: `<Your GitHub account password>`
+---
 
-Treat username as secret: Yes
+### Create a Private Docker Hub Repository
 
-ID: `github`
+1. Log in to [Docker Hub](https://hub.docker.com/repositories/)
+2. Click **Create Repository** and fill in:
 
-### Create a private docker repository
+| Field | Value |
+|-------|-------|
+| Name | `app` |
+| Visibility | `Private` |
 
-1. Navigate to `https://hub.docker.com/repositories/`
+3. Click **Create**.
 
-2. Create a repository
+---
 
-Name: `app`
-Visibility: `Private`
+### Create Jenkins Credentials for Docker Hub
 
-### Create Jenkins credentials for a docker repository
+1. Navigate to **Manage Jenkins** > **Credentials** > **System** > **Global credentials**
+2. Click **Add Credentials** and fill in:
 
-1. Navigate to Manage Jenkins -> Credentials
+| Field | Value |
+|-------|-------|
+| Kind | `Username with password` |
+| Username | `<Your Docker Hub username>` |
+| Password | `<Your Docker Hub password>` |
+| Treat username as secret | `Yes` |
+| ID | `docker` |
 
-2. Click `Add Credentials`
+3. Click **Create**.
 
-3. Select `Username with password`
+---
 
-Username: `<Your Docker account username>`
-Password: `<Your Docker account password>`
+### Create a `Freestyle` Jenkins Job
 
-Treat username as secret: Yes
+#### 1. Create the job
 
-ID: `docker`
+- From the dashboard, click **New Item** (or **Create a job**)
+- Name: `freestyle`
+- Type: **Freestyle project**
+- Click **OK**
 
-### Create `Freestyle` Jenkins job
+#### 2. Configure Source Code Management
 
-1. Go to the main page and click `Create a job`
+Under **Source Code Management**, select **Git** and fill in:
 
-Name: `freestyle`
+| Field | Value |
+|-------|-------|
+| Repository URL | `https://github.com/explicit-logic/jenkins-module-8.2` |
+| Credentials | `github` |
+| Branches to build | `*/freestyle` |
 
-Select an item type: `Freestyle project`
+#### 3. Bind Docker credentials as environment variables
 
-2. Source Code Management - Git
+Under **Build Environment**, check **Use secret text(s) or file(s)**, then click **Add** > **Username and Password (separated)**:
 
-Repository URL: `https://github.com/explicit-logic/jenkins-module-8.2`
+| Field | Value |
+|-------|-------|
+| Username Variable | `USERNAME` |
+| Password Variable | `PASSWORD` |
+| Credentials | `docker` |
 
-Credentials: `github`
+#### 4. Add Maven test step
 
-Branches to build: `*/freestyle`
+Click **Add build step** > **Invoke top-level Maven targets**:
 
-3. Environment -> Use secret text(s) or file(s) -> Add -> Username and Password (separated)
+| Field | Value |
+|-------|-------|
+| Maven Version | `maven-3.9` |
+| Goals | `test` |
+| POM | `app/pom.xml` |
 
-Username Variable: `USERNAME`
-Password Variable: `PASSWORD`
+#### 5. Add Maven package step
 
-Credentials: `docker`
+Click **Add build step** > **Invoke top-level Maven targets** again:
 
-4. Add a build step: `Invoke top-level Maven targets`
+| Field | Value |
+|-------|-------|
+| Maven Version | `maven-3.9` |
+| Goals | `package` |
+| POM | `app/pom.xml` |
 
-Maven Version: `maven-3.9`
+#### 6. Add Docker build & push step
 
-Goals: `test`
+Click **Add build step** > **Execute Shell** and enter:
 
-POM: `app/pom.xml`
-
-5. Add build step: `Invoke top-level Maven targets`
-
-Maven Version: `maven-3.9`
-
-Goals: `package`
-
-POM: `app/pom.xml`
-
-6. Add build step: `Execute Shell`
-
-Command
 ```sh
 cd app
-docker build -t <docker username>/app:freestyle .
+docker build -t <docker_username>/app:freestyle .
 echo $PASSWORD | docker login -u $USERNAME --password-stdin
-docker push <docker username>/app:freestyle
+docker push <docker_username>/app:freestyle
 ```
 
-![Freestyle config](./images/freestyle-config.png)
+> Replace `<docker_username>` with your Docker Hub username.
 
-7. Run the job, click `Build Now`
+![Freestyle job configuration](./images/freestyle-config.png)
+
+#### 7. Run the job
+
+Click **Build Now** and monitor the console output.
 
 ![Freestyle Demo](./images/jenkins-freestyle.gif)
 
-### Create `Pipeline` Jenkins job
+---
 
-1. Go to the main page and click `New Item`
+### Create a `Pipeline` Jenkins Job
 
-Name: `pipeline`
+#### 1. Create the job
 
-Select an item type: `Pipeline`
+- From the dashboard, click **New Item**
+- Name: `pipeline`
+- Type: **Pipeline**
+- Click **OK**
 
-2. Scroll to `Pipeline` section
+#### 2. Configure the Pipeline
 
-Definition: `Pipeline script from SCM`
+Scroll to the **Pipeline** section and fill in:
 
-SCM: `Git`
+| Field | Value |
+|-------|-------|
+| Definition | `Pipeline script from SCM` |
+| SCM | `Git` |
+| Repository URL | `https://github.com/explicit-logic/jenkins-module-8.2` |
+| Credentials | `github` |
+| Branches to build | `*/pipeline` |
 
-Repository URL: `https://github.com/explicit-logic/jenkins-module-8.2`
+Jenkins will look for a `Jenkinsfile` at the root of the branch automatically.
 
-Credentials: `github`
+#### 3. Run the job
 
-Branches to build: `*/pipeline`
+Click **Build with Parameters** and fill in:
 
-3. Run the job, click `Build with Parameters`
+| Parameter | Value |
+|-----------|-------|
+| `DOCKER_REPO` | `<docker_username>/app:pipeline` |
 
-DOCKER_REPO: `<docker username>/app:pipeline`
-
-![Pipeline Params](./images/pipeline-params.png)
+![Pipeline parameters](./images/pipeline-params.png)
 
 ![Jenkins Pipeline Demo](./images/jenkins-pipeline.gif)
+
+---
+
+### Create a `Multibranch Pipeline` Jenkins Job
+
+#### 1. Create the job
+
+- From the dashboard, click **New Item**
+- Name: `multibranch`
+- Type: **Multibranch Pipeline**
+- Click **OK**
+
+#### 2. Configure Branch Sources
+
+Under **Branch Sources**, click **Add source** > **Git** and fill in:
+
+| Field | Value |
+|-------|-------|
+| Project Repository | `https://github.com/explicit-logic/jenkins-module-8.2` |
+| Credentials | `github` |
+
+Click **Save**. Jenkins will automatically scan the repository and create jobs for branches that contain a `Jenkinsfile`.
+
+#### 3. Run the job
+
+Click **Build with Parameters** and fill in:
+
+| Parameter | Value |
+|-----------|-------|
+| `DOCKER_REPO` | `<docker_username>/app` |
+
+> **Notes:**
+> - The Docker image tag is derived from the branch name (e.g., `main`, `pipeline`).
+> - The test phase runs **only** on the `main` branch.
+
+![Multibranch Pipeline Demo](./images/jenkins-multibranch.gif)
