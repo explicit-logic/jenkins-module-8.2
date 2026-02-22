@@ -221,8 +221,8 @@ echo $PASSWORD | docker login -u $USERNAME --password-stdin
 docker push <docker username>/app:freestyle
 ```
 
-![](./images/freestyle-config.png)
+![Freestyle config](./images/freestyle-config.png)
 
-5. Run the job, click `Build Now`
+7. Run the job, click `Build Now`
 
-
+![Freestyle Demo](./images/jenkins-freestyle.gif)
